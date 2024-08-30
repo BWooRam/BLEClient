@@ -1,5 +1,6 @@
 package com.tdcolvin.bleclient.ble
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.BluetoothLeScanner
@@ -29,10 +30,14 @@ class BLEScanner(context: Context) {
         get() = bluetooth.adapter.bluetoothLeScanner
 
     private val scanCallback = object : ScanCallback() {
+        @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
             result ?: return
 
+            if (result.device.name == null || result.device.name.contains("[Unnamed")) {
+                return
+            }
             if (!foundDevices.value.contains(result.device)) {
                 foundDevices.update { it + result.device }
             }

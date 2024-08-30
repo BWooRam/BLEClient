@@ -1,13 +1,17 @@
 package com.tdcolvin.bleclient.ble
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.UUID
@@ -25,14 +29,20 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
     val passwordRead = MutableStateFlow<String?>(null)
     val successfulNameWrites = MutableStateFlow(0)
     val services = MutableStateFlow<List<BluetoothGattService>>(emptyList())
+    private var gatter: BluetoothGatt? = null
 
     private val callback = object: BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             super.onConnectionStateChange(gatt, status, newState)
             val connected = newState == BluetoothGatt.STATE_CONNECTED
             if (connected) {
                 //read the list of services
-                services.value = gatt.services
+                services.value = gatter?.services!!
+                Log.v("bluetooth2 :", services.value.toString())
+                Log.v("bluetooth3 :", gatter?.services!!.toString())
+
+                Log.v("bluetooth service discover?", gatt.discoverServices().toString())
             }
             isConnected.value = connected
         }
@@ -50,6 +60,7 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         ) {
             super.onCharacteristicRead(gatt, characteristic, status)
             if (characteristic.uuid == PASSWORD_CHARACTERISTIC_UUID) {
+                Log.v("PASSWORD", String(characteristic.value))
                 passwordRead.value = String(characteristic.value)
             }
         }
@@ -66,43 +77,46 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         }
     }
 
-    private var gatt: BluetoothGatt? = null
-
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun disconnect() {
-        gatt?.disconnect()
-        gatt?.close()
-        gatt = null
+        gatter?.disconnect()
+        gatter?.close()
+        gatter = null
     }
 
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun connect() {
-        gatt = bluetoothDevice.connectGatt(context, false, callback)
+        gatter = bluetoothDevice.connectGatt(context, false, callback)
     }
 
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun discoverServices() {
-        gatt?.discoverServices()
+        gatter?.discoverServices()
     }
 
-    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun readPassword() {
-        val service = gatt?.getService(CTF_SERVICE_UUID)
-        val characteristic = service?.getCharacteristic(PASSWORD_CHARACTERISTIC_UUID)
-        if (characteristic != null) {
-            val success = gatt?.readCharacteristic(characteristic)
-            Log.v("bluetooth", "Read status: $success")
+        val service = gatter?.getService(CTF_SERVICE_UUID)
+        if (service == null) {
+            Log.v("bluetooth", "service error")
+
         }
+        val characteristic = service?.getCharacteristic(PASSWORD_CHARACTERISTIC_UUID)
+        gatter?.readCharacteristic(characteristic)
+
     }
 
-    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
     fun writeName() {
-        val service = gatt?.getService(CTF_SERVICE_UUID)
+        val service = gatter?.getService(CTF_SERVICE_UUID)
         val characteristic = service?.getCharacteristic(NAME_CHARACTERISTIC_UUID)
         if (characteristic != null) {
-            characteristic.value = "Tom".toByteArray()
-            val success = gatt?.writeCharacteristic(characteristic)
+            val data = "Hello whjung"
+            characteristic.value = data.toByteArray()
+            val success = gatter?.writeCharacteristic(characteristic)
             Log.v("bluetooth", "Write status: $success")
+        } else {
+            Log.v("bluetooth", "Write func error")
+
         }
     }
 }
