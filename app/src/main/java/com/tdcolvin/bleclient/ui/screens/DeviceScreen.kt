@@ -26,7 +26,10 @@ fun DeviceScreen(
     connect: () -> Unit,
     discoverServices: () -> Unit,
     readPassword: () -> Unit,
-    writeName: () -> Unit
+    injectionData: () -> Unit,
+    sendPublicKey: () -> Unit,
+    receivePublicKey: () -> Unit,
+    publicKey: String?
 ) {
     val foundTargetService = discoveredCharacteristics.contains(CTF_SERVICE_UUID.toString())
 
@@ -56,11 +59,20 @@ fun DeviceScreen(
         if (password != null) {
             Text("Found password: $password")
         }
-        Button(onClick = writeName, enabled = isDeviceConnected && foundTargetService) {
-            Text("4. Write Your Name")
+        Button(onClick = injectionData, enabled = isDeviceConnected && foundTargetService) {
+            Text("4. Injection Data")
+        }
+        Button(onClick = sendPublicKey, enabled = isDeviceConnected && foundTargetService) {
+            Text("5. send public Key")
+        }
+        Button(onClick = receivePublicKey, enabled = isDeviceConnected && foundTargetService) {
+            Text("6. receive public Key")
         }
         if (nameWrittenTimes > 0) {
             Text("Successful writes: $nameWrittenTimes")
+        }
+        if (publicKey != null) {
+            Text("public key: $publicKey")
         }
 
         OutlinedButton(modifier = Modifier.padding(top = 40.dp),  onClick = unselectDevice) {

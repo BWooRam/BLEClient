@@ -5,8 +5,11 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.ParcelUuid
 import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -55,7 +58,17 @@ class BLEScanner(context: Context) {
 
     @RequiresPermission(PERMISSION_BLUETOOTH_SCAN)
     fun startScanning() {
-        scanner.startScan(scanCallback)
+        // 필터 설정
+        val serviceUuid = ParcelUuid.fromString(CTF_SERVICE_UUID.toString()) // 예시 UUID
+        val filter = ScanFilter.Builder()
+            .setServiceUuid(serviceUuid)
+            .build()
+
+        val filters = listOf(filter)
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+        scanner.startScan(filters, settings, scanCallback)
         isScanning.value = true
     }
 

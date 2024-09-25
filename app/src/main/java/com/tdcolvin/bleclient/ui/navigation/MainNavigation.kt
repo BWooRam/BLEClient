@@ -53,7 +53,10 @@ fun MainNavigation(viewModel: BLEClientViewModel = viewModel()) {
             connect = viewModel::connectActiveDevice,
             discoverServices = viewModel::discoverActiveDeviceServices,
             readPassword = viewModel::readPasswordFromActiveDevice,
-            writeName = viewModel::writeNameToActiveDevice
+            injectionData = viewModel::injectionDataToActiveDevice,
+            sendPublicKey = viewModel::sendPublicKeyToActiveDevice,
+            receivePublicKey = viewModel::receivePublicKeyToActiveDevice,
+            publicKey = uiState.publicKey
         )
     }
 }

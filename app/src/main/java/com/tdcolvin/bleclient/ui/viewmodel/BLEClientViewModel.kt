@@ -9,8 +9,8 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.tdcolvin.bleclient.ble.BLEScanner
 import com.tdcolvin.bleclient.ble.BLEDeviceConnection
+import com.tdcolvin.bleclient.ble.BLEScanner
 import com.tdcolvin.bleclient.ble.PERMISSION_BLUETOOTH_CONNECT
 import com.tdcolvin.bleclient.ble.PERMISSION_BLUETOOTH_SCAN
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,7 +25,9 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BLEClientViewModel(private val application: Application): AndroidViewModel(application) {
-    private val bleScanner = BLEScanner(application)
+    private val bleScanner = BLEScanner(application).apply {
+
+    }
     private var activeConnection = MutableStateFlow<BLEDeviceConnection?>(null)
 
     private val isDeviceConnected = activeConnection.flatMapLatest { it?.isConnected ?: flowOf(false) }
@@ -34,6 +36,9 @@ class BLEClientViewModel(private val application: Application): AndroidViewModel
     }
     private val activeDevicePassword = activeConnection.flatMapLatest {
         it?.passwordRead ?: flowOf(null)
+    }
+    private val activePublicKey = activeConnection.flatMapLatest {
+        it?.publicKeyRead ?: flowOf(null)
     }
     private val activeDeviceNameWrittenTimes = activeConnection.flatMapLatest {
         it?.successfulNameWrites ?: flowOf(0)
@@ -44,13 +49,14 @@ class BLEClientViewModel(private val application: Application): AndroidViewModel
         _uiState,
         isDeviceConnected,
         activeDeviceServices,
-        activeDevicePassword,
-        activeDeviceNameWrittenTimes
-    ) { state, isDeviceConnected, services, password, nameWrittenTimes ->
+        activePublicKey,
+        activeDeviceNameWrittenTimes,
+
+    ) { state, isDeviceConnected, services, publickey, nameWrittenTimes ->
         state.copy(
             isDeviceConnected = isDeviceConnected,
             discoveredCharacteristics = services.associate { service -> Pair(service.uuid.toString(), service.characteristics.map { it.uuid.toString() }) },
-            password = password,
+            publicKey = publickey,
             nameWrittenTimes = nameWrittenTimes
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BLEClientUIState())
@@ -110,6 +116,21 @@ class BLEClientViewModel(private val application: Application): AndroidViewModel
         activeConnection.value?.writeName()
     }
 
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    fun injectionDataToActiveDevice() {
+        activeConnection.value?.injectionData()
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    fun sendPublicKeyToActiveDevice() {
+        activeConnection.value?.sendPublicKey()
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    fun receivePublicKeyToActiveDevice() {
+        activeConnection.value?.receivePublicKey()
+    }
+
     override fun onCleared() {
         super.onCleared()
 
@@ -133,5 +154,6 @@ data class BLEClientUIState(
     val isDeviceConnected: Boolean = false,
     val discoveredCharacteristics: Map<String, List<String>> = emptyMap(),
     val password: String? = null,
-    val nameWrittenTimes: Int = 0
+    val nameWrittenTimes: Int = 0,
+    val publicKey: String? = null
 )
