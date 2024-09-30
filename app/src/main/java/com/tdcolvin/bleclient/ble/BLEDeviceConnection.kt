@@ -12,11 +12,16 @@ import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import org.json.JSONObject
+import java.math.BigInteger
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.PublicKey
-import java.security.spec.X509EncodedKeySpec
+import java.security.interfaces.ECPublicKey
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPoint
+import java.security.spec.ECPublicKeySpec
 import java.util.Base64
 import java.util.UUID
 import javax.crypto.Cipher
@@ -44,14 +49,14 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     private var privateKey: PrivateKey? = null
     private var receivePublicKey: PublicKey? = null
-
+    private val TAG = "TTTT"
     private val callback = object: BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             super.onConnectionStateChange(gatt, status, newState)
             val connected = newState == BluetoothGatt.STATE_CONNECTED
+            gatter?.requestMtu(255)
             if (connected) {
-                gatter?.requestMtu(255)
                 //read the list of services
                 services.value = gatter?.services!!
                 Log.v("bluetooth2 :", services.value.toString())
@@ -77,8 +82,16 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
             if (characteristic.uuid == PUBLICK_KEY_DATA_CHARACTERISTIC_UUID) {
 
                 Log.v("TTTT Receive : ", String(characteristic.value))
-                Log.v("TTTT Receive Public key", String(characteristic.value))
-                receivePublicKey = getPublicKeyFromEncoded(characteristic.value)
+                Log.d("TTTT Receive content byte : ", characteristic.value.contentToString())
+                Log.d("TTTT Receive base64 :", "String = ${android.util.Base64.encode(characteristic.value, android.util.Base64.NO_WRAP).decodeToString()}")
+
+                val ecParameterSpec: ECParameterSpec = KeyFactory
+                    .getInstance("EC")
+                    .getKeySpec(
+                        publicKey,
+                        ECPublicKeySpec::class.java
+                    ).params
+                receivePublicKey = getEcPublicKey(characteristic.value, ecParameterSpec)
 
             }
         }
@@ -151,6 +164,9 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
     @SuppressLint("MissingPermission")
     fun injectionData() {
         val sharedSecret = generateSharedSecret(privateKey!!, receivePublicKey!!)
+        Log.d("TTTT secret byte : ", sharedSecret.decodeToString())
+        Log.d("TTTT secret content byte : ", sharedSecret.contentToString())
+        Log.d("TTTT secret base64 :", "String = ${android.util.Base64.encode(sharedSecret, android.util.Base64.NO_WRAP).decodeToString()}")
 
         val service = gatter?.getService(CTF_SERVICE_UUID)
         val characteristic = service?.getCharacteristic(DATA_CHARACTERISTIC_UUID)
@@ -187,10 +203,18 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
                 privateKey = this.second
             }
 
+            Log.d("TTTT no public key :", publicKey!!.encoded.decodeToString())
+            Log.d("TTTT no public key size:", publicKey!!.encoded.decodeToString().length.toString())
+            Log.d("TTTT public key size: ", publicKey!!.encoded.size.toString())
+            Log.d("TTTT public data: ", "${publicKey}")
+            Log.d("TTTT public format: ", "${publicKey!!.format}")
             Log.d("TTTT public key :", publicKeyToString(publicKey!!))
+            Log.d("TTTT public Base64 size :", publicKeyToString(publicKey!!).length.toString())
             Log.d("TTTT privateKey key :", priveKeyToString(privateKey!!))
+            Log.d("TTTT publicKey key byte size :", base64ToByteArray(publicKeyToString(publicKey!!)).size.toString())
+            Log.d("TTTT sendData :", "String = ${android.util.Base64.encode(sendData(publicKey!!), android.util.Base64.NO_PADDING).decodeToString()}")
 
-            characteristic.value = publicKey!!.encoded
+            characteristic.value = sendData(publicKey!!)
 
             val success = gatter?.writeCharacteristic(characteristic)
             Log.v("bluetooth", "Write status: $success")
@@ -213,7 +237,6 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     }
 
-
     fun stringToJson(jsonString: String): JSONObject {
         return JSONObject(jsonString)
     }
@@ -228,7 +251,7 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     fun generateKeyPair(): Pair<PublicKey, PrivateKey> {
         val keyGen = KeyPairGenerator.getInstance("EC")
-        keyGen.initialize(256)
+        keyGen.initialize(ECGenParameterSpec("secp256r1")) // P-256은 secp256r1로 정의됨
         val keyPair = keyGen.generateKeyPair()
         return Pair(keyPair.public, keyPair.private)
     }
@@ -254,6 +277,10 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         return iv + encrypted
     }
 
+    fun base64ToByteArray(base64String: String): ByteArray {
+        return Base64.getDecoder().decode(base64String)
+    }
+
     // AES-256 복호화
     fun decrypt(encryptedData: String, secret: ByteArray): ByteArray {
         val key: SecretKey = SecretKeySpec(secret.copyOf(32), "AES")
@@ -268,10 +295,59 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         return cipher.doFinal(encryptedBytes)
     }
 
-    fun getPublicKeyFromEncoded(encoded: ByteArray): PublicKey {
-        val keySpec = X509EncodedKeySpec(encoded)
+    private fun filterMostSignificantByte(byteArray: ByteArray): ByteArray {
+        val xBytes32 = ByteArray(32)
+        val byteArraySize = byteArray.size
+        Log.d(TAG, "filterMostSignificantByte byteArray = ${byteArray.decodeToString()}, byteArraySize = $byteArraySize")
+
+        if (byteArraySize <= 32) {
+            // 패딩 추가
+            System.arraycopy(byteArray, 0, xBytes32, 32 - byteArraySize, byteArraySize)
+        } else if (byteArraySize == 33) {
+            // 33바이트인 경우, 최상위 바이트 제거
+            System.arraycopy(byteArray, 1, xBytes32, 0, 32)
+        } else {
+            throw Throwable("removeMostSignificantByte Too many Byte")
+        }
+
+        return xBytes32
+    }
+
+    private fun getEcPublicKey(ecPublicKey: ByteArray, params: ECParameterSpec): PublicKey {
+        val ecPointX = ecPublicKey.sliceArray(IntRange(1, 32))
+        val ecPointY = ecPublicKey.sliceArray(IntRange(33, 64))
+        // x와 y를 BigInteger로 변환
+        val x = BigInteger(1, ecPointX) // 1은 부호를 나타냄 (양수)
+        val y = BigInteger(1, ecPointY)
+
+        // ECPoint를 사용하여 공개 키의 포인트 정의
+        val ecPoint = ECPoint(x, y)
         val keyFactory = KeyFactory.getInstance("EC") // ECDH 알고리즘 사용
-        return keyFactory.generatePublic(keySpec)
+        val pubSpec = ECPublicKeySpec(ecPoint, params)
+        return keyFactory.generatePublic(pubSpec)
+
+    }
+
+    private fun sendData(publicKey: PublicKey): ByteArray? {
+        if (publicKey is ECPublicKey) {
+            val ecPublicKey = publicKey as ECPublicKey
+            val affineXByteArray = ecPublicKey.w.affineX.toByteArray()
+            val filteredAffineXByteArray = filterMostSignificantByte(affineXByteArray)
+            val affineYByteArray = ecPublicKey.w.affineY.toByteArray()
+            val filteredAffineYByteArray = filterMostSignificantByte(affineYByteArray)
+            val keyByteArray = byteArrayOf(0x04).plus(filteredAffineXByteArray).plus(filteredAffineYByteArray)
+            Log.d(TAG, "ECPublicKey affineXByteArray = ${affineXByteArray.contentToString()}, size = ${affineXByteArray.size}")
+            Log.d(TAG, "ECPublicKey affineYByteArray = ${affineYByteArray.contentToString()}, size = ${affineYByteArray.size}")
+            Log.d(TAG, "ECPublicKey filteredAffineXByteArray = ${filteredAffineXByteArray.contentToString()}, size = ${filteredAffineXByteArray.size}")
+            Log.d(TAG, "ECPublicKey filteredAffineYByteArray = ${filteredAffineYByteArray.contentToString()}, size = ${filteredAffineYByteArray.size}")
+            Log.d(TAG, "ECPublicKey keyByteArray = ${keyByteArray.contentToString()}, size = ${keyByteArray.size}")
+            Log.d(TAG, "String = ${android.util.Base64.encode(keyByteArray, android.util.Base64.NO_PADDING).decodeToString()}")
+
+            return keyByteArray
+        } else {
+            Log.d(TAG, "ECPublicKey This is not an EC public key.")
+        }
+        return null
     }
 
 }
