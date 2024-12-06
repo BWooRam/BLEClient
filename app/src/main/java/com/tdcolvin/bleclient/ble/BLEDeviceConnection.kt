@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.lang.NullPointerException
 import java.math.BigInteger
 import java.nio.charset.Charset
 import java.security.KeyFactory
@@ -38,12 +39,15 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 val CTF_SERVICE_UUID: UUID = UUID.fromString("8c380000-10bd-4fdb-ba21-1922d6cf860d")
-val PUBLICK_KEY_DATA_CHARACTERISTIC_UUID: UUID = UUID.fromString("8c380001-10bd-4fdb-ba21-1922d6cf860d")
+val PUBLICK_KEY_DATA_CHARACTERISTIC_UUID: UUID =
+    UUID.fromString("8c380001-10bd-4fdb-ba21-1922d6cf860d")
 val DATA_CHARACTERISTIC_UUID: UUID = UUID.fromString("8c380002-10bd-4fdb-ba21-1922d6cf860d")
-val data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeefEND_OF_DATA"
+val data =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeefEND_OF_DATA"
 val data2 = "eeeeeeeeeefEND_OF_DATA"
 var clientOffset = 0
-var fullData:ByteArray = byteArrayOf()
+var fullData: ByteArray = byteArrayOf()
+
 @Suppress("DEPRECATION")
 class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") constructor(
     private val context: Context,
@@ -67,7 +71,7 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
     private var readService: BluetoothGattService? = null
     private var readCharacteristic: BluetoothGattCharacteristic? = null
 
-    private val callback = object: BluetoothGattCallback() {
+    private val callback = object : BluetoothGattCallback() {
         // MTU 요청 결과를 처리하는 콜백
         override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
             super.onMtuChanged(gatt, mtu, status)
@@ -157,7 +161,7 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
                 val hexString = fullData.joinToString(" ") { String.format("%02X", it) }
                 Log.d("Complete Byte Data:", "ByteArray: $hexString")
                 Log.d("Complete Data:", String(fullData))
-             // 여기서 받은 데이터를 처리합니다.
+                // 여기서 받은 데이터를 처리합니다.
             } else {
                 // 아직 끝나지 않은 경우, 다음 데이터를 읽기 위해 offset을 증가시키고 다시 요청
                 offset += mtuSize
@@ -227,29 +231,14 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     @SuppressLint("MissingPermission")
     fun writeName() {
-        val service = gatter?.getService(CTF_SERVICE_UUID)
-        val characteristic = service?.getCharacteristic(DATA_CHARACTERISTIC_UUID)
-        characteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-        gatter?.setCharacteristicNotification(characteristic, true)
-        if (characteristic != null) {
-//            val data = "{\n" +
-//                    "  \"ssid\": \"TEST-WiFi-2.4G\",                   // 무선 공유기의 Device Name\n" +
-//                    "  \"bssid\": \"1234-1234-1234\",                  // 무선 공유기의 Device Mac 주소\n" +
-//                    "  \"pw\": \"ABCD1234!\",                          // 무선 공유기의 Password\n" +
-//                    "  \"token\": \"ABCD-EFGH-IJKLMN-OPQRSTUAsdfasdfasdf\"  // Token\n" +
-//                    "}"
-
-            val data =  "안녕하세요1안녕하세요2안녕하세요"
-            val chunkSize = mtuSize - 3
-            val chunks = data.chunked(chunkSize)
-            for (chunk in chunks) {
-                characteristic.value = chunk.toByteArray()
-
-                val success = gatter?.writeCharacteristic(characteristic)
-                Log.v("bluetooth", "Write status: $success")
-
-            }
-        }
+        val isSuccess = writeCharacteristic(
+            serviceUuid = CTF_SERVICE_UUID,
+            charUuid = DATA_CHARACTERISTIC_UUID,
+            writeType =  BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+            byteArray = data.toByteArray(),
+            mtu = mtuSize,
+        )
+        Log.v("bluetooth", "Write status: $isSuccess")
     }
 
     @SuppressLint("MissingPermission")
@@ -259,152 +248,39 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 //        Log.d("TTTT secret content byte : ", sharedSecret.contentToString())
 //        Log.d("TTTT secret base64 :", "String = ${android.util.Base64.encode(sharedSecret, android.util.Base64.NO_WRAP).decodeToString()}")
 
-        val service = gatter?.getService(CTF_SERVICE_UUID)
-        val characteristic = service?.getCharacteristic(DATA_CHARACTERISTIC_UUID)
-        characteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-        gatter?.setCharacteristicNotification(characteristic, true)
-
-        if (characteristic != null) {
-//            val data = "{\n" +
-//                    "  \"ssid\": \"TEST-WiFi-2.4G\",                   // 무선 공유기의 Device Name\n" +
-//                    "  \"bssid\": \"1234-1234-1234\",                  // 무선 공유기의 Device Mac 주소\n" +
-//                    "  \"pw\": \"ABCD1234!\",                          // 무선 공유기의 Password\n" +
-//                    "  \"token\": \"ABCD-EFGH-IJKLMN-OPQRSTUAsdfasdfasdf\"  // Token\n" +
-//                    "}"
-
-            // 특성 값이 너무 크면 데이터를 MTU 크기만큼 나누어 전송
-            val dataBytes = data.toByteArray(Charset.forName("UTF-8"))
-            // MTU 크기 계산 (오버헤드를 고려하여 실제 데이터 전송 크기 계산)
-            val mtuSize = mtuSize - 3 // 헤더 크기 등 고려
-            // 요청된 오프셋에 해당하는 데이터 범위 계산
-            val endOffset = minOf(clientOffset + mtuSize, dataBytes.size)
-            Log.d("BLE Server offset", clientOffset.toString())
-            Log.d("BLE Server endOffset", endOffset.toString())
-
-            if (clientOffset < dataBytes.size) {
-                val dataChunk = dataBytes.copyOfRange(clientOffset, endOffset)
-                Log.d("BLE Server", "Sending data chunk: ${String(dataChunk)}")
-
-                characteristic.value = dataChunk
-                // 서버에 데이터 전송
-                val success = gatter?.writeCharacteristic(characteristic)
-                Log.v("bluetooth", "Write status: $success")
-                clientOffset = endOffset - 2
-                // 데이터가 아직 남아 있다면, 이어서 요청을 처리
-                if (endOffset < dataBytes.size) {
-                    Log.d("BLE Server", "Remaining data, waiting for next read request")
-                    CoroutineScope(Dispatchers.IO).launch {
-                        delay(1000)
-                        injectionData()
-                    }
-                } else {
-                    Log.d("BLE Server", "Data transmission complete.")
-                }
-            } else {
-                // 요청된 offset이 데이터 범위를 벗어나면 오류 응답
-            }
-
-//            val chunks = data.chunked(chunkSize)
-//            CoroutineScope(Dispatchers.IO).launch {
-//                for (chunk in chunks) {
-////                    Log.d("TTTT chunk :", stringToJson(chunk).toString())
-//                    val byteData = chunk.toByteArray()
-////                Log.d("TTTT encrypt data :", String(encrypt(byteData, sharedSecret)))
-////                characteristic.value = encrypt(byteData, sharedSecret)
-//                    Log.d("TTTT chunk", chunk)
-//                    Log.d("TTTT byteData", byteData.decodeToString())
-//
-//                    characteristic.value = byteData
-//                    val success = gatter?.writeCharacteristic(characteristic)
-//                    Log.v("bluetooth", "Write status: $success")
-//                    delay(1000)
-//                }
-//            }
-
-
-        } else {
-            Log.v("bluetooth", "Write func error")
-
-        }
+        writeCharacteristic(
+            serviceUuid = CTF_SERVICE_UUID,
+            charUuid = DATA_CHARACTERISTIC_UUID,
+            writeType =  BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+            byteArray = data.toByteArray(),
+            mtu = mtuSize,
+        )
     }
 
     /**
      * @brief write test1
      */
     @SuppressLint("MissingPermission")
-    private fun writeTest1(offset:Int = 0, fullData:ByteArray = byteArrayOf()) {
-        var clientOffset = clientOffset
+    private fun writeTest1(offset: Int = 0, fullData: ByteArray = byteArrayOf()) {
         val data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeefEND_OF_DATA"
 
-        val service = gatter?.getService(CTF_SERVICE_UUID)
-        val characteristic = service?.getCharacteristic(DATA_CHARACTERISTIC_UUID)
-        characteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-        gatter?.setCharacteristicNotification(characteristic, true)
-
-        if (characteristic != null) {
-            // 특성 값이 너무 크면 데이터를 MTU 크기만큼 나누어 전송
-            val dataBytes = data.toByteArray(Charset.forName("UTF-8"))
-            // MTU 크기 계산 (오버헤드를 고려하여 실제 데이터 전송 크기 계산)
-            val mtuSize = mtuSize - 3 // 헤더 크기 등 고려
-            // 요청된 오프셋에 해당하는 데이터 범위 계산
-            val endOffset = minOf(clientOffset + mtuSize, dataBytes.size)
-            Log.d("BLE Server offset", clientOffset.toString())
-            Log.d("BLE Server endOffset", endOffset.toString())
-
-            if (clientOffset < dataBytes.size) {
-                val dataChunk = dataBytes.copyOfRange(clientOffset, endOffset)
-                Log.d("BLE Server", "Sending data chunk: ${String(dataChunk)}")
-
-                characteristic.value = dataChunk
-                // 서버에 데이터 전송
-                val success = gatter?.writeCharacteristic(characteristic)
-                Log.v("bluetooth", "Write status: $success")
-                clientOffset = endOffset - 2
-                // 데이터가 아직 남아 있다면, 이어서 요청을 처리
-                if (endOffset < dataBytes.size) {
-                    Log.d("BLE Server", "Remaining data, waiting for next read request")
-                    CoroutineScope(Dispatchers.IO).launch {
-                        delay(1000)
-                        writeTest1()
-                    }
-                } else {
-                    Log.d("BLE Server", "Data transmission complete.")
-                }
-            } else {
-                // 요청된 offset이 데이터 범위를 벗어나면 오류 응답
-            }
-        }
+        writeCharacteristic(
+            serviceUuid = CTF_SERVICE_UUID,
+            charUuid = DATA_CHARACTERISTIC_UUID,
+            writeType =  BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+            byteArray = data.toByteArray(),
+            mtu = mtuSize,
+        )
     }
 
     @SuppressLint("MissingPermission")
     fun sendPublicKey() {
-        val service = gatter?.getService(CTF_SERVICE_UUID)
-        val characteristic = service?.getCharacteristic(PUBLICK_KEY_DATA_CHARACTERISTIC_UUID)
-        characteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-//        gatter?.setCharacteristicNotification(characteristic, true)
-
-        if (characteristic != null) {
-//            Log.d("TTTT data :", stringToJson(data).toString())
-//
-//            characteristic.value = stringToJson(data).toString().toByteArray()
-            characteristic.value = data2.toByteArray()
-
-//
-//            CoroutineScope(Dispatchers.IO).launch {
-//                for (i in 0..3) {
-//
-//                }
-//
-//            }
-            Log.d("TTTT data", "${data2.toByteArray().decodeToString()}")
-            val success = gatter?.writeCharacteristic(characteristic)
-            Log.v("bluetooth", "Write status: $success")
-//            delay(3000)
-        } else {
-            Log.v("bluetooth", "Write func error")
-
-        }
-
+        writeCharacteristic(
+            serviceUuid = CTF_SERVICE_UUID,
+            charUuid = PUBLICK_KEY_DATA_CHARACTERISTIC_UUID,
+            writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+            byteArray = data2.toByteArray()
+        )
 
 //        val service = gatter?.getService(CTF_SERVICE_UUID)
 //        val characteristic = service?.getCharacteristic(PUBLICK_KEY_DATA_CHARACTERISTIC_UUID)
@@ -434,6 +310,71 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 //
 //        }
 
+    }
+
+
+    /**
+     * writeCharacteristic
+     * 필요 권한 :  Manifest.permission.BLUETOOTH_CONNECT
+     *
+     * @param serviceUuid
+     * @param charUuid
+     * @param writeType
+     * @param byteArray
+     * @return
+     */
+    @SuppressLint("MissingPermission")
+    private fun writeCharacteristic(
+        serviceUuid: UUID,
+        charUuid: UUID,
+        writeType: Int,
+        byteArray: ByteArray,
+        mtu: Int = 0
+    ): List<Boolean> {
+        val service = gatter?.getService(serviceUuid)
+            ?: throw NullPointerException("Gatter or Service  is null")
+
+        val characteristic = service.getCharacteristic(charUuid).apply {
+            setWriteType(writeType)
+            value = byteArray
+        } ?: throw NullPointerException("Characteristic is null")
+
+        val tempResultList = mutableListOf<Boolean>()
+
+        if(mtu > 0){
+            //Mtu Size 따른 쪼개서 보내기 작업 시작
+            val sliceByteArray = sliceByteArrayMtu(byteArray, mtu)
+            for(slice in sliceByteArray){
+                val isSuccess = gatter?.writeCharacteristic(characteristic) ?: false
+                tempResultList.add(isSuccess)
+            }
+        }else{
+            //Mtu Size 고려 안하고 보내기 작업 시작
+            val isSuccess = gatter?.writeCharacteristic(characteristic) ?: false
+            tempResultList.add(isSuccess)
+        }
+
+        return tempResultList
+    }
+
+    private fun sliceByteArrayMtu(byteArray: ByteArray, mtu: Int): List<ByteArray> {
+        val temp = mutableListOf<ByteArray>()
+        val totalSize = byteArray.size
+        var startOffset = 0
+        var endOffset = 0
+
+        while (endOffset < totalSize) {
+            // 요청된 오프셋에 해당하는 데이터 범위 계산
+            endOffset = minOf(startOffset + mtu, totalSize)
+            val dataChunk = byteArray.copyOfRange(startOffset, endOffset)
+            startOffset = endOffset
+            Log.d("BLE Server endOffset", endOffset.toString())
+            Log.d("BLE Server startOffset", startOffset.toString())
+            Log.d("BLE Server", "Sending data chunk: ${String(dataChunk)}")
+            temp.add(dataChunk)
+        }
+
+        return temp
     }
 
     @SuppressLint("MissingPermission")
@@ -478,7 +419,8 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
     fun encrypt(data: ByteArray, secret: ByteArray): ByteArray {
         val key: SecretKey = SecretKeySpec(secret.copyOf(32), "AES") // 32 bytes for AES-256
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        val iv = ByteArray(16).apply { java.security.SecureRandom().nextBytes(this) } // 랜덤 IV 생성
+        val iv =
+            ByteArray(16).apply { java.security.SecureRandom().nextBytes(this) } // 랜덤 IV 생성
         val ivParameterSpec = IvParameterSpec(iv)
 
         cipher.init(Cipher.ENCRYPT_MODE, key, ivParameterSpec)
@@ -506,10 +448,13 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         return cipher.doFinal(encryptedBytes)
     }
 
-     fun filterMostSignificantByte(byteArray: ByteArray): ByteArray {
+    fun filterMostSignificantByte(byteArray: ByteArray): ByteArray {
         val xBytes32 = ByteArray(32)
         val byteArraySize = byteArray.size
-        Log.d(TAG, "filterMostSignificantByte byteArray = ${byteArray.decodeToString()}, byteArraySize = $byteArraySize")
+        Log.d(
+            TAG,
+            "filterMostSignificantByte byteArray = ${byteArray.decodeToString()}, byteArraySize = $byteArraySize"
+        )
 
         if (byteArraySize <= 32) {
             // 패딩 추가
@@ -546,13 +491,35 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
             val filteredAffineXByteArray = filterMostSignificantByte(affineXByteArray)
             val affineYByteArray = ecPublicKey.w.affineY.toByteArray()
             val filteredAffineYByteArray = filterMostSignificantByte(affineYByteArray)
-            val keyByteArray = byteArrayOf(0x04).plus(filteredAffineXByteArray).plus(filteredAffineYByteArray)
-            Log.d(TAG, "ECPublicKey affineXByteArray = ${affineXByteArray.contentToString()}, size = ${affineXByteArray.size}")
-            Log.d(TAG, "ECPublicKey affineYByteArray = ${affineYByteArray.contentToString()}, size = ${affineYByteArray.size}")
-            Log.d(TAG, "ECPublicKey filteredAffineXByteArray = ${filteredAffineXByteArray.contentToString()}, size = ${filteredAffineXByteArray.size}")
-            Log.d(TAG, "ECPublicKey filteredAffineYByteArray = ${filteredAffineYByteArray.contentToString()}, size = ${filteredAffineYByteArray.size}")
-            Log.d(TAG, "ECPublicKey keyByteArray = ${keyByteArray.contentToString()}, size = ${keyByteArray.size}")
-            Log.d(TAG, "String = ${android.util.Base64.encode(keyByteArray, android.util.Base64.NO_PADDING).decodeToString()}")
+            val keyByteArray =
+                byteArrayOf(0x04).plus(filteredAffineXByteArray).plus(filteredAffineYByteArray)
+            Log.d(
+                TAG,
+                "ECPublicKey affineXByteArray = ${affineXByteArray.contentToString()}, size = ${affineXByteArray.size}"
+            )
+            Log.d(
+                TAG,
+                "ECPublicKey affineYByteArray = ${affineYByteArray.contentToString()}, size = ${affineYByteArray.size}"
+            )
+            Log.d(
+                TAG,
+                "ECPublicKey filteredAffineXByteArray = ${filteredAffineXByteArray.contentToString()}, size = ${filteredAffineXByteArray.size}"
+            )
+            Log.d(
+                TAG,
+                "ECPublicKey filteredAffineYByteArray = ${filteredAffineYByteArray.contentToString()}, size = ${filteredAffineYByteArray.size}"
+            )
+            Log.d(
+                TAG,
+                "ECPublicKey keyByteArray = ${keyByteArray.contentToString()}, size = ${keyByteArray.size}"
+            )
+            Log.d(
+                TAG,
+                "String = ${
+                    android.util.Base64.encode(keyByteArray, android.util.Base64.NO_PADDING)
+                        .decodeToString()
+                }"
+            )
 
             return keyByteArray
         } else {
